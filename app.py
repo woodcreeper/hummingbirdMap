@@ -19,7 +19,14 @@ def create_species_map(df, species_name):
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
 
-    fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles='Esri.WorldImagery')
+    fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles=None)
+folium.TileLayer(
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+    name="Esri Satellite",
+    overlay=False,
+    control=False
+).add_to(fmap)
   
 
     for _, row in df.iterrows():
