@@ -10,11 +10,18 @@ from datetime import datetime
 app = Flask(__name__)
 
 def create_species_map(df, species_name):
+    print("Requested species:", species_name)
+    print("Available species in dataset:", df['species_scientific_name_banding'].unique())
     df = df[df['species_scientific_name_banding'] == species_name]
+    print(f"Filtered dataset has {len(df)} rows.")
 
     # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
+    if df.empty:
+        print("No data available after filtering. Returning blank map.")
+        return "<p>No data available for the selected species.</p>"
+
     fmap = folium.Map(
         location=[mean_lat, mean_lon],
         zoom_start=4,
