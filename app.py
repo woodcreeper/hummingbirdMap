@@ -45,13 +45,7 @@ def create_species_map(df, species_name):
         except:
             duration_days = "NA"
 
-        popup_html = f"""
-        <b>Tag ID:</b> {row['original_band']}<br>
-        <b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br>
-        <b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br>
-        <b>Distance:</b> {distance_km:.1f} km<br>
-        <b>Duration:</b> {duration_days} days
-        """
+        popup_html = f"<b>Tag ID:</b> {row['original_band']}<br><b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br><b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br><b>Distance:</b> {distance_km:.1f} km<br><b>Duration:</b> {duration_days} days"
         popup = folium.Popup(popup_html, max_width=400)
 
         # Add banding marker with popup
