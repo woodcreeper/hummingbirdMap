@@ -39,8 +39,8 @@ def create_species_map(df, species_name):
         distance_km = geodesic(banding_coords, recap_coords).km
 
         try:
-            band_date = datetime.strptime(row['event_date_banding'], "%Y-%m-%d")
-            recap_date = datetime.strptime(row['event_date_recap_enc'], "%Y-%m-%d")
+            band_date = row['event_date_banding']
+            recap_date = row['event_date_recap_enc']
             duration_days = (recap_date - band_date).days
         except:
             duration_days = "NA"
@@ -83,7 +83,7 @@ def create_species_map(df, species_name):
 
 @app.route("/<species>")
 def map_view(species):
-    df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
+    df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv", parse_dates=["event_date_banding", "event_date_recap_enc"])
     html_map = create_species_map(df, species)
     return render_template_string("""
         <html>
