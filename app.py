@@ -34,7 +34,6 @@ def create_species_map(df, species_name):
         recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
         distance_km = geodesic(banding_coords, recap_coords).km
 
-        # Calculate date difference in days
         try:
             band_date = datetime.strptime(row['event_date_banding'], "%Y-%m-%d")
             recap_date = datetime.strptime(row['event_date_recap_enc'], "%Y-%m-%d")
@@ -42,8 +41,7 @@ def create_species_map(df, species_name):
         except:
             duration_days = "NA"
 
-        # Combined popup
-        summary_popup_html = (
+        popup_html = (
             f"<b>Track Summary</b><br>"
             f"<b>Tag ID:</b> {row['original_band']}<br><br>"
             f"<b>Banding:</b><br>"
@@ -57,18 +55,11 @@ def create_species_map(df, species_name):
             f"<b>Distance:</b> {distance_km:.1f} km<br>"
             f"<b>Duration:</b> {duration_days} days"
         )
+        popup = folium.Popup(popup_html, max_width=400)
 
         feature_group = FeatureGroup(name=f"Track: {row['original_band']}")
 
-        # Add summary popup to entire feature group using invisible marker
-        folium.Marker(
-            location=[
-                (banding_coords[0] + recap_coords[0]) / 2,
-                (banding_coords[1] + recap_coords[1]) / 2
-            ],
-            icon=folium.DivIcon(html=''),  # invisible marker
-            popup=folium.Popup(summary_popup_html, max_width=400)
-        ).add_to(feature_group)
+        highlight_style = {'weight': 5, 'color': 'yellow'}
 
         folium.CircleMarker(
             location=banding_coords,
@@ -88,9 +79,24 @@ def create_species_map(df, species_name):
             fill_opacity=0.8
         ).add_to(feature_group)
 
-        folium.PolyLine(
-            locations=[banding_coords, recap_coords],
-            color='white', weight=2, opacity=0.6
+        folium.GeoJson(
+            data={
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [
+                        [banding_coords[1], banding_coords[0]],
+                        [recap_coords[1], recap_coords[0]]
+                    ]
+                }
+            },
+            style_function=lambda x: {
+                'color': 'white',
+                'weight': 2,
+                'opacity': 0.6
+            },
+            highlight_function=lambda x: highlight_style,
+            tooltip=popup
         ).add_to(feature_group)
 
         feature_group.add_to(fmap)
