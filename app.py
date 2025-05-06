@@ -30,8 +30,11 @@ def create_species_map(df, species_name):
     ).add_to(fmap)
 
     for _, row in df.iterrows():
-        banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
-        recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
+        if pd.isna(row['lat_dd_banding']) or pd.isna(row['lon_dd_banding']) or pd.isna(row['lat_dd_recap_enc']) or pd.isna(row['lon_dd_recap_enc']):
+            continue  # Skip incomplete rows
+
+        banding_coords = [row['lat_dd_banding'], row['lon_dd_banding']]
+        recap_coords = [row['lat_dd_recap_enc'], row['lon_dd_recap_enc']]
         distance_km = geodesic(banding_coords, recap_coords).km
 
         try:
@@ -59,15 +62,12 @@ def create_species_map(df, species_name):
 
         feature_group = FeatureGroup(name=f"Track: {row['original_band']}")
 
-        highlight_style = {'weight': 5, 'color': 'yellow'}
-
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white', weight=2, opacity=0.6,
             tooltip="Hover to highlight"
         ).add_to(feature_group)
 
-        # Add endpoints with popups that reference the line
         for coords in [banding_coords, recap_coords]:
             folium.CircleMarker(
                 location=coords,
