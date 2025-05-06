@@ -42,7 +42,14 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='lightblue',
             fill_opacity=0.8,
-            tooltip=f"Banding\nID: {row['original_band']}\nDate: {row['event_date_banding']}"
+            popup=folium.Popup(
+                f"<b>Banding Record</b><br>"
+                f"Tag ID: {row['original_band']}<br>"
+                f"Date: {row['event_date_banding']}<br>"
+                f"Country: {row['iso_country_banding']}<br>"
+                f"State: {row['iso_subdivision_banding']}",
+                max_width=300
+            )
         ).add_to(fmap)
 
         folium.CircleMarker(
@@ -52,7 +59,15 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='pink',
             fill_opacity=0.8,
-            tooltip=f"Encounter\nID: {row['original_band']}\nDate: {row['event_date_recap_enc']}"
+            popup=folium.Popup(
+                f"<b>Encounter Record</b><br>"
+                f"Tag ID: {row['original_band']}<br>"
+                f"Date: {row['event_date_recap_enc']}<br>"
+                f"Country: {row['iso_country_recap_enc']}<br>"
+                f"State: {row['iso_subdivision_recap_enc']}<br>"
+                f"Distance from Banding: {distance_km:.1f} km",
+                max_width=300
+            )
         ).add_to(fmap)
 
         folium.PolyLine(
