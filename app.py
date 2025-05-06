@@ -10,20 +10,11 @@ from datetime import datetime
 app = Flask(__name__)
 
 def create_species_map(df, species_name):
-    print("Species name from URL:", species_name)
-    df_species = df['species_scientific_name_banding'].dropna().unique()
-    print("Available species in dataset:", df_species)
-    df = df[df['species_scientific_name_banding'].str.strip().str.lower() == species_name.strip().lower()]
-
-    # Drop rows with missing coordinates
-    print(f"Rows before dropna: {df.shape[0]}")
-    df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
-    print(f"Rows after dropna: {df.shape[0]}")
+    df = df[df['species_scientific_name_banding'] == species_name]
 
     # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
-
     fmap = folium.Map(
         location=[mean_lat, mean_lon],
         zoom_start=4,
@@ -52,7 +43,7 @@ def create_species_map(df, species_name):
         """
         popup = folium.Popup(popup_html, max_width=400)
 
-        # Add banding and recap markers
+        # Add banding marker with popup
         folium.CircleMarker(
             location=banding_coords,
             radius=4,
@@ -63,6 +54,7 @@ def create_species_map(df, species_name):
             popup=popup
         ).add_to(fmap)
 
+        # Add encounter marker with popup
         folium.CircleMarker(
             location=recap_coords,
             radius=4,
@@ -73,13 +65,14 @@ def create_species_map(df, species_name):
             popup=popup
         ).add_to(fmap)
 
-        # Add connecting line
+        # Add line with popup
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white', weight=2, opacity=0.6,
             popup=popup
         ).add_to(fmap)
 
+    # Add mouse position for reference
     MousePosition().add_to(fmap)
     return fmap._repr_html_()
 
