@@ -1,85 +1,57 @@
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import contextily as ctx
+from shapely.geometry import Point, LineString
 import pandas as pd
-import folium
-from folium import Popup
-from folium.plugins import MousePosition
-from shapely.geometry import LineString
-from geopy.distance import geodesic
-from flask import Flask, render_template_string
 
-app = Flask(__name__)
+def plot_species_map(csv_path, species_name):
+    # Load the filtered dataset
+    df = pd.read_csv(csv_path)
 
-def create_species_map(df, species_name):
+    # Filter to selected species
     df = df[df['species_scientific_name_banding'] == species_name]
 
-    # Create map centered on mean location
-    mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
-    mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
-    fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles='Esri.WorldImagery')
+    # Create GeoDataFrames for banding and encounter locations
+    geometry_banding = [Point(xy) for xy in zip(df['lon_dd_banding'], df['lat_dd_banding'])]
+    geometry_encounter = [Point(xy) for xy in zip(df['lon_dd_recap_enc'], df['lat_dd_recap_enc'])]
 
-    for _, row in df.iterrows():
-        banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
-        recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
+    gdf_banding = gpd.GeoDataFrame(df, geometry=geometry_banding, crs='EPSG:4326')
+    gdf_encounter = gpd.GeoDataFrame(df, geometry=geometry_encounter, crs='EPSG:4326')
 
-        # Calculate distance
-        distance_km = geodesic(banding_coords, recap_coords).km
+    # Convert to Web Mercator for basemap compatibility
+    gdf_banding = gdf_banding.to_crs(epsg=3857)
+    gdf_encounter = gdf_encounter.to_crs(epsg=3857)
 
-        # Add banding marker with smaller CircleMarker
-        folium.CircleMarker(
-            location=banding_coords,
-            radius=4,
-            color='lightblue',
-            fill=True,
-            fill_color='lightblue',
-            fill_opacity=0.8,
-            tooltip=f"Banding\nID: {row['original_band']}\nDate: {row['event_date_banding']}"
-        ).add_to(fmap)
+    # Define visual properties
+    banding_color = 'yellow' if 'rufus' in species_name.lower() else 'cyan'
+    encounter_color = 'magenta' if 'rufus' in species_name.lower() else 'lightblue'
 
-        # Add encounter marker with smaller CircleMarker
-        folium.CircleMarker(
-            location=recap_coords,
-            radius=4,
-            color='pink',
-            fill=True,
-            fill_color='pink',
-            fill_opacity=0.8,
-            tooltip=f"Encounter\nID: {row['original_band']}\nDate: {row['event_date_recap_enc']}"
-        ).add_to(fmap)
+    # Create the map
+    fig, ax = plt.subplots(figsize=(14, 12))
 
-        # Add line with distance popup
-        line = folium.PolyLine(
-            locations=[banding_coords, recap_coords],
-            color='white', weight=2, opacity=0.6,
-            tooltip=f"{distance_km:.1f} km"
-        )
-        line.add_to(fmap)
+    # Plot points
+    gdf_banding.plot(ax=ax, marker='o', color=banding_color, markersize=50,
+                     label=f'{species_name} - Banding', alpha=0.9, edgecolor='black')
+    gdf_encounter.plot(ax=ax, marker='X', color=encounter_color, markersize=70,
+                       label=f'{species_name} - Encounter', alpha=0.9, edgecolor='black')
 
-    # Add mouse position for reference
-    MousePosition().add_to(fmap)
-    return fmap._repr_html_()
+    # Plot connecting lines
+    for idx, row in gdf_banding.iterrows():
+        banding_point = row.geometry
+        encounter_point = gdf_encounter.geometry.iloc[idx]
+        line = LineString([banding_point, encounter_point])
+        ax.plot(*line.xy, color='white', linestyle='--', linewidth=1, alpha=0.6)
 
-@app.route("/<species>")
-def map_view(species):
-    df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
-    html_map = create_species_map(df, species)
-    return render_template_string("""
-        <html>
-        <head><title>{{ species }} Map</title></head>
-        <body>
-            <h2>{{ species }} Banding and Encounter Map</h2>
-            {{ html_map|safe }}
-        </body>
-        </html>
-    """, species=species, html_map=html_map)
+    # Add satellite basemap
+    ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
 
-@app.route("/")
-def index():
-    return """
-    <h2>Choose a species to view:</h2>
-    <ul>
-        <li><a href='/Selasphorus rufus'>Rufous Hummingbird</a></li>
-        <li><a href='/Archilochus colubris'>Ruby-throated Hummingbird</a></li>
-    </ul>
-    """
+    # Finalize plot
+    ax.set_axis_off()
+    ax.set_title(f'{species_name} Banding and Encounter Map')
+    ax.legend()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    plt.show()
+
+# Example usage:
+# plot_species_map('filtered_hummingbird_recap_encounters_updated.csv', 'Selasphorus rufus')
+# plot_species_map('filtered_hummingbird_recap_encounters_updated.csv', 'Archilochus colubris')
