@@ -56,7 +56,7 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='lightblue',
             fill_opacity=0.8,
-            popup=popup
+            popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
         # Add encounter marker with popup
@@ -67,14 +67,14 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='pink',
             fill_opacity=0.8,
-            popup=popup
+            popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
         # Add line with popup
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white', weight=2, opacity=0.6,
-            popup=popup
+            popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
     # Add mouse position for reference
