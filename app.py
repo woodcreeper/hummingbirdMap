@@ -16,15 +16,27 @@ app = Flask(__name__)
 def create_species_map(df, species_name):
     logger.info(f"Requested species: {species_name}")
     logger.info(f"Available species in dataset: {df['species_scientific_name_banding'].unique()}")
+
+    # Normalize and filter by species name
+    species_name = species_name.strip().lower()
+    df['species_scientific_name_banding'] = df['species_scientific_name_banding'].str.lower()
     df = df[df['species_scientific_name_banding'] == species_name]
     logger.info(f"Filtered dataset has {len(df)} rows.")
+
+    # Convert date columns to datetime
+    df['event_date_banding'] = pd.to_datetime(df['event_date_banding'], errors='coerce')
+    df['event_date_recap_enc'] = pd.to_datetime(df['event_date_recap_enc'], errors='coerce')
+
+    # Drop rows with missing coordinates
+    df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
+
+    if df.empty:
+        logger.warning("No data available after filtering. Returning blank map.")
+        return "<p>No data available for the selected species.</p>"
 
     # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
-    if df.empty:
-        logger.warning("No data available after filtering. Returning blank map.")
-        return "<p>No data available for the selected species.</p>"
 
     fmap = folium.Map(
         location=[mean_lat, mean_lon],
@@ -38,17 +50,21 @@ def create_species_map(df, species_name):
         recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
         distance_km = geodesic(banding_coords, recap_coords).km
 
-        try:
-            band_date = row['event_date_banding']
-            recap_date = row['event_date_recap_enc']
-            duration_days = (recap_date - band_date).days
-        except:
+        # Safely calculate duration
+        if pd.notnull(row['event_date_banding']) and pd.notnull(row['event_date_recap_enc']):
+            duration_days = (row['event_date_recap_enc'] - row['event_date_banding']).days
+        else:
             duration_days = "NA"
 
-        popup_html = f"<b>Tag ID:</b> {row['original_band']}<br><b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br><b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br><b>Distance:</b> {distance_km:.1f} km<br><b>Duration:</b> {duration_days} days"
-        popup = folium.Popup(popup_html, max_width=400)
+        popup_html = f"""
+        <b>Tag ID:</b> {row['original_band']}<br>
+        <b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br>
+        <b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br>
+        <b>Distance:</b> {distance_km:.1f} km<br>
+        <b>Duration:</b> {duration_days} days
+        """
 
-        # Add banding marker with popup
+        # Add banding marker
         folium.CircleMarker(
             location=banding_coords,
             radius=4,
@@ -59,7 +75,7 @@ def create_species_map(df, species_name):
             popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
-        # Add encounter marker with popup
+        # Add encounter marker
         folium.CircleMarker(
             location=recap_coords,
             radius=4,
@@ -70,14 +86,13 @@ def create_species_map(df, species_name):
             popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
-        # Add line with popup
+        # Add line between points
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white', weight=2, opacity=0.6,
             popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
-    # Add mouse position for reference
     MousePosition().add_to(fmap)
     return fmap.get_root().render()
 
