@@ -61,43 +61,23 @@ def create_species_map(df, species_name):
 
         highlight_style = {'weight': 5, 'color': 'yellow'}
 
-        folium.CircleMarker(
-            location=banding_coords,
-            radius=4,
-            color='lightblue',
-            fill=True,
-            fill_color='lightblue',
-            fill_opacity=0.8
+        folium.PolyLine(
+            locations=[banding_coords, recap_coords],
+            color='white', weight=2, opacity=0.6,
+            tooltip="Hover to highlight"
         ).add_to(feature_group)
 
-        folium.CircleMarker(
-            location=recap_coords,
-            radius=4,
-            color='pink',
-            fill=True,
-            fill_color='pink',
-            fill_opacity=0.8
-        ).add_to(feature_group)
-
-        folium.GeoJson(
-            data={
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [
-                        [banding_coords[1], banding_coords[0]],
-                        [recap_coords[1], recap_coords[0]]
-                    ]
-                }
-            },
-            style_function=lambda x: {
-                'color': 'white',
-                'weight': 2,
-                'opacity': 0.6
-            },
-            highlight_function=lambda x: highlight_style,
-            tooltip=popup
-        ).add_to(feature_group)
+        # Add endpoints with popups that reference the line
+        for coords in [banding_coords, recap_coords]:
+            folium.CircleMarker(
+                location=coords,
+                radius=4,
+                color='lightblue' if coords == banding_coords else 'pink',
+                fill=True,
+                fill_color='lightblue' if coords == banding_coords else 'pink',
+                fill_opacity=0.8,
+                popup=popup
+            ).add_to(feature_group)
 
         feature_group.add_to(fmap)
 
