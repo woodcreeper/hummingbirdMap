@@ -18,7 +18,7 @@ def validate_species_entries(df):
 
 def create_species_map(df, species_name):
     print(f"Filtering for species: '{species_name}'")
-    df = df[df['species_scientific_name_banding'] == species_name]
+    df = df[df['species_scientific_name_banding'].str.strip().str.lower() == species_name.strip().lower()]
     print(f"Filtered data shape: {df.shape}")
 
     if df.empty or df[['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].isnull().any().any():
