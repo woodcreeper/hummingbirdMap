@@ -5,11 +5,12 @@ from folium.plugins import MousePosition
 from shapely.geometry import LineString
 from geopy.distance import geodesic
 from flask import Flask, render_template_string
+from datetime import datetime
 
 app = Flask(__name__)
 
 def create_species_map(df, species_name):
-    df = df[df['species_scientific_name_banding'] == species_name]
+    df = df[df['species_scientific_name_banding'].str.strip().str.lower() == species_name.strip().lower()]
 
     # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
@@ -24,11 +25,25 @@ def create_species_map(df, species_name):
     for _, row in df.iterrows():
         banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
         recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
-
-        # Calculate distance
         distance_km = geodesic(banding_coords, recap_coords).km
 
-        # Add banding marker with smaller CircleMarker
+        try:
+            band_date = datetime.strptime(row['event_date_banding'], "%Y-%m-%d")
+            recap_date = datetime.strptime(row['event_date_recap_enc'], "%Y-%m-%d")
+            duration_days = (recap_date - band_date).days
+        except:
+            duration_days = "NA"
+
+        popup_html = f"""
+        <b>Tag ID:</b> {row['original_band']}<br>
+        <b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br>
+        <b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br>
+        <b>Distance:</b> {distance_km:.1f} km<br>
+        <b>Duration:</b> {duration_days} days
+        """
+        popup = folium.Popup(popup_html, max_width=400)
+
+        # Add banding and recap markers
         folium.CircleMarker(
             location=banding_coords,
             radius=4,
@@ -36,10 +51,9 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='lightblue',
             fill_opacity=0.8,
-            tooltip=f"Banding\nID: {row['original_band']}\nDate: {row['event_date_banding']}"
+            popup=popup
         ).add_to(fmap)
 
-        # Add encounter marker with smaller CircleMarker
         folium.CircleMarker(
             location=recap_coords,
             radius=4,
@@ -47,18 +61,16 @@ def create_species_map(df, species_name):
             fill=True,
             fill_color='pink',
             fill_opacity=0.8,
-            tooltip=f"Encounter\nID: {row['original_band']}\nDate: {row['event_date_recap_enc']}"
+            popup=popup
         ).add_to(fmap)
 
-        # Add line with distance popup
-        line = folium.PolyLine(
+        # Add connecting line
+        folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white', weight=2, opacity=0.6,
-            tooltip=f"{distance_km:.1f} km"
-        )
-        line.add_to(fmap)
+            popup=popup
+        ).add_to(fmap)
 
-    # Add mouse position for reference
     MousePosition().add_to(fmap)
     return fmap._repr_html_()
 
