@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 def create_combined_species_map(df):
-    # Ensure proper datetime parsing
+    # Parse dates
     df['event_date_banding'] = pd.to_datetime(df['event_date_banding'], errors='coerce')
     df['event_date_recap_enc'] = pd.to_datetime(df['event_date_recap_enc'], errors='coerce')
 
-    # Drop rows missing location data
+    # Drop records with missing coordinates
     df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
 
-    # Base map centered on mean
+    # Set center of map
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
 
@@ -30,21 +30,20 @@ def create_combined_species_map(df):
         attr="Tiles © Esri"
     )
 
-    # Define species-specific settings
+    # Color settings (corrected)
     species_styles = {
         "Selasphorus rufus": {
-            "banding_color": "orange",
-            "recap_color": "red",
-            "track_color": "red"
+            "banding_color": "#b35806",
+            "recap_color": "#f1a340",
+            "track_color": "#fee0b6"
         },
         "Archilochus colubris": {
-            "banding_color": "blue",
-            "recap_color": "purple",
-            "track_color": "purple"
+            "banding_color": "#542788",
+            "recap_color": "#998ec3",
+            "track_color": "#d8daeb"
         }
     }
 
-    # Create a feature group per species
     for species, styles in species_styles.items():
         group = FeatureGroup(name=species)
         species_df = df[df['species_scientific_name_banding'].str.lower() == species.lower()]
@@ -90,7 +89,7 @@ def create_combined_species_map(df):
                 popup=folium.Popup(popup_html, max_width=400)
             ).add_to(group)
 
-            # Track as GeoJson with hover highlight
+            # Interactive track line
             track_geojson = {
                 "type": "Feature",
                 "geometry": {
@@ -121,7 +120,6 @@ def create_combined_species_map(df):
                 popup=folium.Popup(popup_html, max_width=400)
             ).add_to(group)
 
-        # Add species group to map
         group.add_to(fmap)
 
     # Add extras
@@ -129,7 +127,6 @@ def create_combined_species_map(df):
     folium.LayerControl(collapsed=False).add_to(fmap)
 
     return fmap.get_root().render()
-
 
 @app.route("/")
 def index():
