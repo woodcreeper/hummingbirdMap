@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import folium
-from folium import Popup, FeatureGroup
+from folium import Popup
 from folium.plugins import MousePosition
 from shapely.geometry import LineString
 from geopy.distance import geodesic
@@ -60,13 +60,22 @@ def create_species_map(df, species_name):
         )
         popup = folium.Popup(popup_html, max_width=400)
 
-        feature_group = FeatureGroup(name=f"Track: {row['original_band']}")
-
-        folium.PolyLine(
-            locations=[banding_coords, recap_coords],
-            color='white', weight=2, opacity=0.6,
+        line = folium.GeoJson(
+            data={
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [
+                        [banding_coords[1], banding_coords[0]],
+                        [recap_coords[1], recap_coords[0]]
+                    ]
+                }
+            },
+            style_function=lambda x: {'color': 'white', 'weight': 2, 'opacity': 0.6},
+            highlight_function=lambda x: {'color': 'yellow', 'weight': 5},
             tooltip="Hover to highlight"
-        ).add_to(feature_group)
+        )
+        line.add_to(fmap)
 
         for coords in [banding_coords, recap_coords]:
             folium.CircleMarker(
@@ -77,9 +86,7 @@ def create_species_map(df, species_name):
                 fill_color='lightblue' if coords == banding_coords else 'pink',
                 fill_opacity=0.8,
                 popup=popup
-            ).add_to(feature_group)
-
-        feature_group.add_to(fmap)
+            ).add_to(fmap)
 
     MousePosition().add_to(fmap)
     return fmap._repr_html_()
