@@ -12,10 +12,15 @@ app = Flask(__name__)
 def create_species_map(df, species_name):
     df = df[df['species_scientific_name_banding'] == species_name]
 
-    # Create map centered on mean location
+    # Handle case where no data exists for the species
+    if df.empty or df[['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].isnull().any().any():
+        return "<p>No valid location data available for this species.</p>"
+
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
+
     fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles='Esri.WorldImagery')
+  
 
     for _, row in df.iterrows():
         banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
