@@ -86,10 +86,32 @@ def create_species_map(df, species_name):
             popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
-        # Add line between points
-        folium.PolyLine(
-            locations=[banding_coords, recap_coords],
-            color='white', weight=2, opacity=0.6,
+        # Add interactive line (GeoJson) with highlight on hover
+        folium.GeoJson(
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [
+                        [banding_coords[1], banding_coords[0]],
+                        [recap_coords[1], recap_coords[0]]
+                    ],
+                },
+                "properties": {
+                    "popupContent": popup_html
+                }
+            },
+            style_function=lambda feature: {
+                "color": "white",
+                "weight": 2,
+                "opacity": 0.6,
+            },
+            highlight_function=lambda feature: {
+                "color": "yellow",
+                "weight": 4,
+                "opacity": 1.0,
+            },
+            tooltip=folium.Tooltip("Click for details"),
             popup=folium.Popup(popup_html, max_width=400)
         ).add_to(fmap)
 
