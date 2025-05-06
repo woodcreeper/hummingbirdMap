@@ -85,7 +85,7 @@ def create_species_map(df, species_name):
 
     # Add mouse position for reference
     MousePosition().add_to(fmap)
-    return fmap._repr_html_()
+    return fmap.get_root().render()
 
 @app.route("/<species>")
 def map_view(species):
