@@ -1,4 +1,3 @@
-import os
 import pandas as pd
 import folium
 from folium import Popup
@@ -6,107 +5,71 @@ from folium.plugins import MousePosition
 from shapely.geometry import LineString
 from geopy.distance import geodesic
 from flask import Flask, render_template_string
-from datetime import datetime
 
 app = Flask(__name__)
 
-def validate_species_entries(df):
-    print("Available unique species names in 'species_scientific_name_banding':")
-    print(df['species_scientific_name_banding'].dropna().unique())
-    print("Top 5 records:")
-    print(df[['original_band', 'species_scientific_name_banding', 'lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].head())
-
 def create_species_map(df, species_name):
-    print(f"Filtering for species: '{species_name}'")
-    df = df[df['species_scientific_name_banding'].str.strip().str.lower() == species_name.strip().lower()]
-    print(f"Filtered data shape: {df.shape}")
+    df = df[df['species_scientific_name_banding'] == species_name]
 
-    if df.empty or df[['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].isnull().any().any():
-        return "<p>No valid location data available for this species.</p>"
-
+    # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
-
-    fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles=None)
-
-    folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-        name="Esri Satellite",
-        overlay=False,
-        control=False
-    ).add_to(fmap)
+    fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles='Esri.WorldImagery')
 
     for _, row in df.iterrows():
-        if pd.isna(row['lat_dd_banding']) or pd.isna(row['lon_dd_banding']) or pd.isna(row['lat_dd_recap_enc']) or pd.isna(row['lon_dd_recap_enc']):
-            continue  # Skip incomplete rows
+        banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
+        recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
 
-        banding_coords = [row['lat_dd_banding'], row['lon_dd_banding']]
-        recap_coords = [row['lat_dd_recap_enc'], row['lon_dd_recap_enc']]
+        # Calculate distance
         distance_km = geodesic(banding_coords, recap_coords).km
 
-        try:
-            band_date = datetime.strptime(row['event_date_banding'], "%Y-%m-%d")
-            recap_date = datetime.strptime(row['event_date_recap_enc'], "%Y-%m-%d")
-            duration_days = (recap_date - band_date).days
-        except:
-            duration_days = "NA"
-
-        popup_html = (
-            f"<b>Track Summary</b><br>"
-            f"<b>Tag ID:</b> {row['original_band']}<br><br>"
-            f"<b>Banding:</b><br>"
-            f"Date: {row['event_date_banding']}<br>"
-            f"Country: {row['iso_country_banding']}<br>"
-            f"State: {row['iso_subdivision_banding']}<br><br>"
-            f"<b>Encounter:</b><br>"
-            f"Date: {row['event_date_recap_enc']}<br>"
-            f"Country: {row['iso_country_recap_enc']}<br>"
-            f"State: {row['iso_subdivision_recap_enc']}<br><br>"
-            f"<b>Distance:</b> {distance_km:.1f} km<br>"
-            f"<b>Duration:</b> {duration_days} days"
-        )
-        popup = folium.Popup(popup_html, max_width=400)
-
-        folium.PolyLine(
-            locations=[banding_coords, recap_coords],
-            color='white',
-            weight=2,
-            opacity=0.6,
-            popup=popup
+        # Add banding marker with smaller CircleMarker
+        folium.CircleMarker(
+            location=banding_coords,
+            radius=4,
+            color='lightblue',
+            fill=True,
+            fill_color='lightblue',
+            fill_opacity=0.8,
+            tooltip=f"Banding\nID: {row['original_band']}\nDate: {row['event_date_banding']}"
         ).add_to(fmap)
 
-        for coords in [banding_coords, recap_coords]:
-            folium.CircleMarker(
-                location=coords,
-                radius=4,
-                color='lightblue' if coords == banding_coords else 'pink',
-                fill=True,
-                fill_color='lightblue' if coords == banding_coords else 'pink',
-                fill_opacity=0.8,
-                popup=popup
-            ).add_to(fmap)
+        # Add encounter marker with smaller CircleMarker
+        folium.CircleMarker(
+            location=recap_coords,
+            radius=4,
+            color='pink',
+            fill=True,
+            fill_color='pink',
+            fill_opacity=0.8,
+            tooltip=f"Encounter\nID: {row['original_band']}\nDate: {row['event_date_recap_enc']}"
+        ).add_to(fmap)
 
+        # Add line with distance popup
+        line = folium.PolyLine(
+            locations=[banding_coords, recap_coords],
+            color='white', weight=2, opacity=0.6,
+            tooltip=f"{distance_km:.1f} km"
+        )
+        line.add_to(fmap)
+
+    # Add mouse position for reference
     MousePosition().add_to(fmap)
     return fmap._repr_html_()
 
 @app.route("/<species>")
 def map_view(species):
-    try:
-        df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
-        validate_species_entries(df)
-        html_map = create_species_map(df, species)
-        return render_template_string("""
-            <html>
-            <head><title>{{ species }} Map</title></head>
-            <body>
-                <h2>{{ species }} Banding and Encounter Map</h2>
-                {{ html_map|safe }}
-            </body>
-            </html>
-        """, species=species, html_map=html_map)
-    except Exception as e:
-        return f"<h2>Internal Server Error</h2><pre>{e}</pre>", 500
+    df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
+    html_map = create_species_map(df, species)
+    return render_template_string("""
+        <html>
+        <head><title>{{ species }} Map</title></head>
+        <body>
+            <h2>{{ species }} Banding and Encounter Map</h2>
+            {{ html_map|safe }}
+        </body>
+        </html>
+    """, species=species, html_map=html_map)
 
 @app.route("/")
 def index():
@@ -119,5 +82,4 @@ def index():
     """
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=5000, debug=True)
