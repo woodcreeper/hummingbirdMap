@@ -10,10 +10,15 @@ from datetime import datetime
 app = Flask(__name__)
 
 def create_species_map(df, species_name):
+    print("Species name from URL:", species_name)
+    df_species = df['species_scientific_name_banding'].dropna().unique()
+    print("Available species in dataset:", df_species)
     df = df[df['species_scientific_name_banding'].str.strip().str.lower() == species_name.strip().lower()]
 
     # Drop rows with missing coordinates
+    print(f"Rows before dropna: {df.shape[0]}")
     df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
+    print(f"Rows after dropna: {df.shape[0]}")
 
     # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
