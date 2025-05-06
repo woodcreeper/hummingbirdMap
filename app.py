@@ -43,7 +43,7 @@ def create_species_map(df, species_name):
             duration_days = "NA"
 
         # Combined popup
-        summary_popup = folium.Popup(
+        summary_popup_html = (
             f"<b>Track Summary</b><br>"
             f"<b>Tag ID:</b> {row['original_band']}<br><br>"
             f"<b>Banding:</b><br>"
@@ -55,11 +55,20 @@ def create_species_map(df, species_name):
             f"Country: {row['iso_country_recap_enc']}<br>"
             f"State: {row['iso_subdivision_recap_enc']}<br><br>"
             f"<b>Distance:</b> {distance_km:.1f} km<br>"
-            f"<b>Duration:</b> {duration_days} days",
-            max_width=400
+            f"<b>Duration:</b> {duration_days} days"
         )
 
         feature_group = FeatureGroup(name=f"Track: {row['original_band']}")
+
+        # Add summary popup to entire feature group using invisible marker
+        folium.Marker(
+            location=[
+                (banding_coords[0] + recap_coords[0]) / 2,
+                (banding_coords[1] + recap_coords[1]) / 2
+            ],
+            icon=folium.DivIcon(html=''),  # invisible marker
+            popup=folium.Popup(summary_popup_html, max_width=400)
+        ).add_to(feature_group)
 
         folium.CircleMarker(
             location=banding_coords,
@@ -67,8 +76,7 @@ def create_species_map(df, species_name):
             color='lightblue',
             fill=True,
             fill_color='lightblue',
-            fill_opacity=0.8,
-            popup=summary_popup
+            fill_opacity=0.8
         ).add_to(feature_group)
 
         folium.CircleMarker(
@@ -77,14 +85,12 @@ def create_species_map(df, species_name):
             color='pink',
             fill=True,
             fill_color='pink',
-            fill_opacity=0.8,
-            popup=summary_popup
+            fill_opacity=0.8
         ).add_to(feature_group)
 
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
-            color='white', weight=2, opacity=0.6,
-            popup=summary_popup
+            color='white', weight=2, opacity=0.6
         ).add_to(feature_group)
 
         feature_group.add_to(fmap)
