@@ -1,4 +1,4 @@
-mport pandas as pd
+import pandas as pd
 import folium
 from folium import Popup
 from folium.plugins import MousePosition
