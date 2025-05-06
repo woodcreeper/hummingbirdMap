@@ -60,23 +60,16 @@ def create_species_map(df, species_name):
         )
         popup = folium.Popup(popup_html, max_width=400)
 
-        line = folium.GeoJson(
-            data={
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [
-                        [banding_coords[1], banding_coords[0]],
-                        [recap_coords[1], recap_coords[0]]
-                    ]
-                }
-            },
-            style_function=lambda x: {'color': 'white', 'weight': 2, 'opacity': 0.6},
-            highlight_function=lambda x: {'color': 'yellow', 'weight': 5},
-            tooltip="Hover to highlight"
-        )
-        line.add_to(fmap)
+        # Add polyline with popup
+        folium.PolyLine(
+            locations=[banding_coords, recap_coords],
+            color='white',
+            weight=2,
+            opacity=0.6,
+            popup=popup
+        ).add_to(fmap)
 
+        # Add both endpoints with same popup
         for coords in [banding_coords, recap_coords]:
             folium.CircleMarker(
                 location=coords,
