@@ -10,8 +10,16 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+def validate_species_entries(df):
+    print("Available unique species names in 'species_scientific_name_banding':")
+    print(df['species_scientific_name_banding'].dropna().unique())
+    print("Top 5 records:")
+    print(df[['original_band', 'species_scientific_name_banding', 'lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].head())
+
 def create_species_map(df, species_name):
+    print(f"Filtering for species: '{species_name}'")
     df = df[df['species_scientific_name_banding'] == species_name]
+    print(f"Filtered data shape: {df.shape}")
 
     if df.empty or df[['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc']].isnull().any().any():
         return "<p>No valid location data available for this species.</p>"
@@ -60,7 +68,6 @@ def create_species_map(df, species_name):
         )
         popup = folium.Popup(popup_html, max_width=400)
 
-        # Add polyline with popup
         folium.PolyLine(
             locations=[banding_coords, recap_coords],
             color='white',
@@ -69,7 +76,6 @@ def create_species_map(df, species_name):
             popup=popup
         ).add_to(fmap)
 
-        # Add both endpoints with same popup
         for coords in [banding_coords, recap_coords]:
             folium.CircleMarker(
                 location=coords,
@@ -88,6 +94,7 @@ def create_species_map(df, species_name):
 def map_view(species):
     try:
         df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
+        validate_species_entries(df)
         html_map = create_species_map(df, species)
         return render_template_string("""
             <html>
