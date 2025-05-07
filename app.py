@@ -12,25 +12,27 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 def create_combined_species_map(df):
-    # Parse dates
     df['event_date_banding'] = pd.to_datetime(df['event_date_banding'], errors='coerce')
     df['event_date_recap_enc'] = pd.to_datetime(df['event_date_recap_enc'], errors='coerce')
 
-    # Drop records with missing coordinates
     df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
 
-    # Set map center
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
 
     fmap = folium.Map(
         location=[mean_lat, mean_lon],
         zoom_start=4,
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri"  # No layer name = won't appear in LayerControl
+        tiles=None  # Prevent default base layer from showing in LayerControl
     )
 
-    # Color settings
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles © Esri",
+        name=None,
+        control=False  # Don't include in LayerControl
+    ).add_to(fmap)
+
     species_styles = {
         "Selasphorus rufus": {
             "banding_color": "#b35806",
@@ -150,6 +152,16 @@ def index():
                 h2 {
                     padding: 10px;
                     text-align: center;
+                }
+                .leaflet-control-layers {
+                    max-width: 150px;
+                    overflow-x: auto;
+                    font-size: 14px;
+                }
+                .leaflet-control-layers-expanded {
+                    width: auto !important;
+                    max-width: 90vw !important;
+                    white-space: nowrap;
                 }
             </style>
         </head>
