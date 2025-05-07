@@ -9,7 +9,7 @@ from flask import Flask, render_template_string
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(_name__)
+app = Flask(__name__)
 
 def create_combined_species_map(df):
     # Parse dates
