@@ -1,10 +1,11 @@
 import logging
 import pandas as pd
 import folium
-from folium import FeatureGroup, Marker
-from folium.plugins import MousePosition
+from folium import FeatureGroup
+from folium.plugins import MousePosition, BeautifyIcon
 from geopy.distance import geodesic
 from flask import Flask, render_template_string
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,6 @@ def create_combined_species_map(df):
 
     fmap = folium.Map(location=[mean_lat, mean_lon], zoom_start=4, tiles=None)
 
-    # Add Esri base tiles without putting it in LayerControl
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="Tiles © Esri",
@@ -30,7 +30,6 @@ def create_combined_species_map(df):
         control=False
     ).add_to(fmap)
 
-    # Identify multi-encounter tag IDs
     tag_counts = df['original_band'].value_counts()
     multi_encounter_tags = tag_counts[tag_counts > 1].index
 
@@ -53,16 +52,20 @@ def create_combined_species_map(df):
         multi_df = species_df[species_df['original_band'].isin(multi_encounter_tags)]
         single_df = species_df[~species_df['original_band'].isin(multi_encounter_tags)]
 
-        # --- SINGLE-ENCOUNTER ENTRIES ---
+        # SINGLE ENCOUNTER MARKERS
         for _, row in single_df.iterrows():
             banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
             recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
+
+            distance_km = geodesic(banding_coords, recap_coords).km
+            duration_days = (row['event_date_recap_enc'] - row['event_date_banding']).days if pd.notnull(row['event_date_banding']) and pd.notnull(row['event_date_recap_enc']) else "NA"
 
             popup_html = f"""
             <b>Tag ID:</b> {row['original_band']}<br>
             <b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br>
             <b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br>
-            <b>Distance:</b> {geodesic(banding_coords, recap_coords).km:.1f} km
+            <b>Distance:</b> {distance_km:.1f} km<br>
+            <b>Duration:</b> {duration_days} days
             """
 
             folium.CircleMarker(
@@ -93,50 +96,79 @@ def create_combined_species_map(df):
                 popup=folium.Popup(popup_html, max_width=400)
             ).add_to(group)
 
-        # --- MULTI-ENCOUNTER ENTRIES ---
+        # MULTI-ENCOUNTER TRACKS
         for tag, group_df in multi_df.groupby("original_band"):
-            points = []
-            popup_lines = []
             group_df = group_df.sort_values("event_date_recap_enc")
+            coords = []
+            summary_lines = []
+            total_distance = 0
+            total_days = 0
+            previous_date = None
+            previous_coords = None
 
             for _, row in group_df.iterrows():
                 banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
                 recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
 
-                # Add banding and recap points (as stars)
-                Marker(
+                # Banding star marker
+                folium.Marker(
                     location=banding_coords,
-                    icon=folium.Icon(color='white', icon='star', prefix='fa'),
-                    popup=folium.Popup(f"Multi-encounter tag: {tag}<br>Banding at {row['iso_subdivision_banding']}", max_width=400)
+                    icon=BeautifyIcon(
+                        icon_shape='star',
+                        background_color=styles["banding_color"],
+                        border_color='black',
+                        text_color='white'
+                    ),
+                    popup=folium.Popup(f"<b>Tag ID:</b> {tag}<br>Banding: {row['iso_subdivision_banding']}", max_width=300)
                 ).add_to(group)
 
-                Marker(
+                # Recap star marker
+                folium.Marker(
                     location=recap_coords,
-                    icon=folium.Icon(color='white', icon='star', prefix='fa'),
-                    popup=folium.Popup(f"Multi-encounter tag: {tag}<br>Recap at {row['iso_subdivision_recap_enc']}", max_width=400)
+                    icon=BeautifyIcon(
+                        icon_shape='star',
+                        background_color=styles["recap_color"],
+                        border_color='black',
+                        text_color='white'
+                    ),
+                    popup=folium.Popup(f"<b>Tag ID:</b> {tag}<br>Recap: {row['iso_subdivision_recap_enc']}", max_width=300)
                 ).add_to(group)
 
-                # Collect sequential points
-                points.append(banding_coords)
-                points.append(recap_coords)
+                coords.append(banding_coords)
+                coords.append(recap_coords)
 
-                popup_lines.append(
-                    f"{row['event_date_banding'].date() if pd.notnull(row['event_date_banding']) else ''} → "
-                    f"{row['event_date_recap_enc'].date() if pd.notnull(row['event_date_recap_enc']) else ''}: "
-                    f"{row['iso_subdivision_banding']} → {row['iso_subdivision_recap_enc']}"
-                )
+                if previous_coords and previous_date:
+                    leg_distance = geodesic(previous_coords, banding_coords).km
+                    leg_days = (row['event_date_banding'] - previous_date).days if pd.notnull(previous_date) and pd.notnull(row['event_date_banding']) else "NA"
+                    total_distance += leg_distance
+                    if isinstance(leg_days, int): total_days += leg_days
+                    summary_lines.append(f"{previous_date.date()} → {row['event_date_banding'].date()}: {leg_distance:.1f} km in {leg_days} days")
 
-            # Remove duplicates in point list
-            unique_points = []
-            [unique_points.append(p) for p in points if p not in unique_points]
+                leg_distance = geodesic(banding_coords, recap_coords).km
+                leg_days = (row['event_date_recap_enc'] - row['event_date_banding']).days if pd.notnull(row['event_date_recap_enc']) and pd.notnull(row['event_date_banding']) else "NA"
+                total_distance += leg_distance
+                if isinstance(leg_days, int): total_days += leg_days
+                summary_lines.append(f"{row['event_date_banding'].date()} → {row['event_date_recap_enc'].date()}: {leg_distance:.1f} km in {leg_days} days")
 
-            # Line and summary popup
+                previous_coords = recap_coords
+                previous_date = row['event_date_recap_enc']
+
+            seen = set()
+            clean_coords = []
+            for pt in coords:
+                if pt not in seen:
+                    clean_coords.append(pt)
+                    seen.add(pt)
+
+            summary_lines.append(f"<b>Total distance:</b> {total_distance:.1f} km")
+            summary_lines.append(f"<b>Total duration:</b> {total_days} days")
+
             folium.PolyLine(
-                locations=unique_points,
+                locations=clean_coords,
                 color=styles["track_color"],
                 weight=3,
                 opacity=0.9,
-                popup=folium.Popup("<br>".join(popup_lines), max_width=400)
+                popup=folium.Popup("<br>".join(summary_lines), max_width=450)
             ).add_to(group)
 
         group.add_to(fmap)
@@ -144,7 +176,7 @@ def create_combined_species_map(df):
     MousePosition().add_to(fmap)
     folium.LayerControl(collapsed=False).add_to(fmap)
 
-    # Add floating legend
+    # Floating legend
     legend_html = """
     <div style="
         position: fixed;
@@ -162,7 +194,7 @@ def create_combined_species_map(df):
     <span style="color:#f1a340;">●</span> RUHU Encounter<br>
     <span style="color:#542788;">●</span> RTHU Banding<br>
     <span style="color:#998ec3;">●</span> RTHU Encounter<br>
-    <span style="color:black;">★</span> Multi-encounter Tag<br>
+    <span style="color:black;">★</span> Multi-encounter (star marker)<br>
     </div>
     """
     fmap.get_root().html.add_child(folium.Element(legend_html))
