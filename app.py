@@ -1,85 +1,90 @@
-import logging
 import pandas as pd
 import folium
-from folium import FeatureGroup
+from folium import Popup
 from folium.plugins import MousePosition
+from shapely.geometry import LineString
 from geopy.distance import geodesic
 from flask import Flask, render_template_string
- @@ -20,19 +20,20 @@ def create_combined_species_map(df):
+
+app = Flask(__name__)
+
+def create_species_map(df, species_name):
+    df = df[df['species_scientific_name_banding'] == species_name]
+
+    # Create map centered on mean location
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
-
     fmap = folium.Map(
         location=[mean_lat, mean_lon],
         zoom_start=4,
-        tiles=None  # Prevent default base layer from showing in LayerControl
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
     )
 
-    folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri",
-        name=None,
-        control=False  # Don't include in LayerControl
-    ).add_to(fmap)
+    for _, row in df.iterrows():
+        banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
+        recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
 
-    species_styles = {
-        "Selasphorus rufus": {
-            "banding_color": "#b35806",
- @@ -49,24 +50,19 @@ def create_combined_species_map(df):
-    for species, styles in species_styles.items():
-        group = FeatureGroup(name=species)
-        species_df = df[df['species_scientific_name_banding'].str.lower() == species.lower()]
+        # Calculate distance
+        distance_km = geodesic(banding_coords, recap_coords).km
 
-        for _, row in species_df.iterrows():
-            banding_coords = (row['lat_dd_banding'], row['lon_dd_banding'])
-            recap_coords = (row['lat_dd_recap_enc'], row['lon_dd_recap_enc'])
-            distance_km = geodesic(banding_coords, recap_coords).km
+        # Add banding marker with smaller CircleMarker
+        folium.CircleMarker(
+            location=banding_coords,
+            radius=4,
+            color='lightblue',
+            fill=True,
+            fill_color='lightblue',
+            fill_opacity=0.8,
+            tooltip=f"Banding\nID: {row['original_band']}\nDate: {row['event_date_banding']}"
+        ).add_to(fmap)
 
-            duration_days = (
-                (row['event_date_recap_enc'] - row['event_date_banding']).days
-                if pd.notnull(row['event_date_banding']) and pd.notnull(row['event_date_recap_enc'])
-                else "NA"
-            )
+        # Add encounter marker with smaller CircleMarker
+        folium.CircleMarker(
+            location=recap_coords,
+            radius=4,
+            color='pink',
+            fill=True,
+            fill_color='pink',
+            fill_opacity=0.8,
+            tooltip=f"Encounter\nID: {row['original_band']}\nDate: {row['event_date_recap_enc']}"
+        ).add_to(fmap)
 
-            popup_html = f"""
-            <b>Tag ID:</b> {row['original_band']}<br>
-            <b>Banding:</b> {row['event_date_banding']} ({row['iso_country_banding']}, {row['iso_subdivision_banding']})<br>
-            <b>Encounter:</b> {row['event_date_recap_enc']} ({row['iso_country_recap_enc']}, {row['iso_subdivision_recap_enc']})<br>
-            <b>Distance:</b> {distance_km:.1f} km<br>
-            <b>Duration:</b> {duration_days} days
-            """
+        # Add line with distance popup
+        line = folium.PolyLine(
+            locations=[banding_coords, recap_coords],
+            color='white', weight=2, opacity=0.6,
+            tooltip=f"{distance_km:.1f} km"
+        )
+        line.add_to(fmap)
 
-            folium.CircleMarker(
- @@ -89,41 +85,88 @@ def create_combined_species_map(df):
-                popup=folium.Popup(popup_html, max_width=400)
-            ).add_to(group)
+    # Add mouse position for reference
+    MousePosition().add_to(fmap)
+    return fmap._repr_html_()
 
-            track_geojson = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [
-                        [banding_coords[1], banding_coords[0]],
-                        [recap_coords[1], recap_coords[0]]
-                    ]
-                },
-                "properties": {
-                    "popupContent": popup_html
-                }
-            }
+@app.route("/<species>")
+def map_view(species):
+    df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
+    html_map = create_species_map(df, species)
+    return render_template_string("""
+        <html>
+        <head><title>{{ species }} Map</title></head>
+        <body>
+            <h2>{{ species }} Banding and Encounter Map</h2>
+            {{ html_map|safe }}
+        </body>
+        </html>
+    """, species=species, html_map=html_map)
 
-            folium.GeoJson(
-                data=track_geojson,
-                style_function=lambda feature, color=styles["track_color"]: {
-                    "color": color,
-                    "weight": 2,
-                    "opacity": 0.6
-                },
-                highlight_function=lambda feature: {
-                    "color": "yellow",
-                    "weight": 4,
-                    "opacity": 1.0
-                },
-                tooltip=folium.Tooltip("Click for details"),
-                popup=folium.Popup(popup_html, max_width=400)
-            ).add_to(group)
+@app.route("/")
+def index():
+    return """
+    <h2>Choose a species to view:</h2>
+    <ul>
+        <li><a href='/Selasphorus rufus'>Rufous Hummingbird</a></li>
+        <li><a href='/Archilochus colubris'>Ruby-throated Hummingbird</a></li>
+    </ul>
+    """
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
