@@ -9,7 +9,7 @@ from flask import Flask, render_template_string
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(_name__)
 
 def create_combined_species_map(df):
     # Parse dates
@@ -19,7 +19,7 @@ def create_combined_species_map(df):
     # Drop records with missing coordinates
     df = df.dropna(subset=['lat_dd_banding', 'lon_dd_banding', 'lat_dd_recap_enc', 'lon_dd_recap_enc'])
 
-    # Set center of map
+    # Set map center
     mean_lat = df[['lat_dd_banding', 'lat_dd_recap_enc']].stack().mean()
     mean_lon = df[['lon_dd_banding', 'lon_dd_recap_enc']].stack().mean()
 
@@ -27,10 +27,10 @@ def create_combined_species_map(df):
         location=[mean_lat, mean_lon],
         zoom_start=4,
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri"
+        attr="Tiles © Esri"  # No layer name = won't appear in LayerControl
     )
 
-    # Color settings (corrected)
+    # Color settings
     species_styles = {
         "Selasphorus rufus": {
             "banding_color": "#b35806",
@@ -67,7 +67,6 @@ def create_combined_species_map(df):
             <b>Duration:</b> {duration_days} days
             """
 
-            # Banding marker
             folium.CircleMarker(
                 location=banding_coords,
                 radius=4,
@@ -78,7 +77,6 @@ def create_combined_species_map(df):
                 popup=folium.Popup(popup_html, max_width=400)
             ).add_to(group)
 
-            # Recap marker
             folium.CircleMarker(
                 location=recap_coords,
                 radius=4,
@@ -89,7 +87,6 @@ def create_combined_species_map(df):
                 popup=folium.Popup(popup_html, max_width=400)
             ).add_to(group)
 
-            # Interactive track line
             track_geojson = {
                 "type": "Feature",
                 "geometry": {
@@ -122,7 +119,6 @@ def create_combined_species_map(df):
 
         group.add_to(fmap)
 
-    # Add extras
     MousePosition().add_to(fmap)
     folium.LayerControl(collapsed=False).add_to(fmap)
 
@@ -133,11 +129,33 @@ def index():
     df = pd.read_csv("filtered_hummingbird_recap_encounters_updated.csv")
     html_map = create_combined_species_map(df)
     return render_template_string("""
-        <html>
-        <head><title>Hummingbird Recapture Map</title></head>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+            <title>Hummingbird Recapture Map</title>
+            <style>
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    height: 100%;
+                    width: 100%;
+                    font-family: sans-serif;
+                }
+                #map {
+                    height: 100vh;
+                    width: 100%;
+                }
+                h2 {
+                    padding: 10px;
+                    text-align: center;
+                }
+            </style>
+        </head>
         <body>
             <h2>Hummingbird Banding and Encounter Map</h2>
-            {{ html_map|safe }}
+            <div id="map">{{ html_map|safe }}</div>
         </body>
         </html>
     """, html_map=html_map)
